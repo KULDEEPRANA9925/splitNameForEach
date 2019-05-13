@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+	<file:config name="File_Config" doc:name="File Config" doc:id="fcdfd0d1-2d58-4acf-8971-43a219bf8b2c" >
+		<file:connection workingDir="H:\mule-batch\input" />
+	</file:config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="49550d68-3940-40d9-a73f-6b2a98287959" >
+		<db:oracle-connection host="localhost" user="kuldeep" password="test" instance="XE" />
+	</db:config>
+	<flow name="splitNameforEachFlow" doc:id="f37f41b9-8e27-4885-bca6-b824b4a9eaf3" >
+		<file:listener doc:name="On New or Updated File" doc:id="86141cda-52f3-4c6d-b59e-fde1f1d3f6a0" config-ref="File_Config" moveToDirectory="H:\mule-batch\archive" recursive="false">
+			<scheduling-strategy >
+				<fixed-frequency />
+			</scheduling-strategy>
+			<file:matcher filenamePattern="*.csv" />
+		</file:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="e925484b-8b40-46a3-bbd5-9bc15bba80ea" />
+		<ee:transform doc:name="Transform Message" doc:id="8ac4f8d3-ffcd-4391-a08f-649c0e15a2e9" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map {	
+	id: $.id,
+	title: if ($.gender != "female") "Mr." else "Ms.",
+	firstName: ($.name splitBy(' '))[0],
+	lastName: ($.name splitBy(' '))[1],
+	fullName: $.name,
+	age: $.age	
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="168087b5-12ac-44b3-b88e-bdec1a76c190" message="#[vars.title]" />
+		<foreach doc:name="For Each" doc:id="5dd14440-fb86-4ede-b73c-46e899e5b32d" >
+			<set-variable value="#[payload.title]" doc:name="Set Variable" doc:id="4785bbbf-2e8e-4a6c-8f6b-61a0416f4505" variableName="gender"/>
+			<logger level="INFO" doc:name="Logger" doc:id="d6174505-b136-42b9-94be-f484ab522de6" />
+			<db:insert doc:name="Insert" doc:id="ba1a0dfb-5e78-4d3c-86c6-1a3a32fcbc5d" config-ref="Database_Config">
+				<db:sql>INSERT INTO CONCAT(id,title,firstName,lastName,fullName,age)
+VALUES(:id,:title,:firstName,:lastName,:fullName,:age)</db:sql>
+				<db:input-parameters><![CDATA[#[payload]]]></db:input-parameters>
+			</db:insert>
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="b8ccd1ea-010c-48de-89f1-962c4734eec1" message="#[payload]"/>
+	</flow>
+</mule>
